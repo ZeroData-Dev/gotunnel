@@ -1,0 +1,58 @@
+name: Build and Release
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+    build:
+        runs-on: ${{ matrix.os }}
+        strategy:
+            matrix:
+                os: [ubuntu-20.04, macos-latest, windows-latest]
+                arch: [amd64, arm64]
+        env:
+            GOARCH: ${{ matrix.arch }}
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v4
+
+            - name: Set up Go
+              uses: actions/setup-go@v4
+              with:
+                go-version: '1.24'
+
+            - name: Set up environment variables
+              run: |
+                echo "GOOS=$(echo '${{ matrix.os }}' | sed 's/-.*//')" >> $GITHUB_ENV
+                shell: bash
+
+            - name: Build binary
+              run: |
+                mkdir -p dist
+                go build -v -o dist/gotunnel-${{ env.GOOS }}-${{ matrix.arch }}
+                shell: bash
+
+            - name: Upload artifact
+              uses: actions/upload-artifact@v4
+              with:
+                name: gotunnel-${{ env.GOOS }}-${{ matrix.arch }}
+                path: dist/gotunnel-${{ env.GOOS }}-${{ matrix.arch }}
+
+    release:
+        needs: build
+        runs-on: ubuntu-20.04
+        steps:
+            - name: Download all artifacts
+              uses: actions/download-artifact@v4
+              with:
+                path: dist
+
+            - name: Create Release
+              uses: softprops/action-gh-release@v2
+              with:
+                files: dist/**/*
+              env:
+                GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
