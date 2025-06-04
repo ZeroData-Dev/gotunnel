@@ -79,7 +79,7 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/gotunnel-ubuntu24-*
+          files: dist/**/*
           tag_name: ${{ github.event_name == 'workflow_dispatch' && steps.set_tag_name.outputs.tag_name || github.ref }}
           name: ${{ github.event_name == 'workflow_dispatch' && format('Manual Release {0}', steps.set_tag_name.outputs.tag_name) || format('Release {0}', github.ref_name) }}
           draft: ${{ github.event_name == 'workflow_dispatch' }}
