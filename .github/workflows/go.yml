@@ -51,6 +51,15 @@ jobs:
         with:
           path: dist
 
+      - name: Debug - List Downloaded Files
+        run: |
+          echo "Contents of the 'dist' directory after download:"
+          ls -R dist
+          echo "Current working directory:"
+          pwd
+          echo "Looking for 'gotunnel-ubuntu24-*' files:"
+          find dist -name "gotunnel-ubuntu24-*" -print
+
       - name: Checkout code (required for Git commands)
         uses: actions/checkout@v4
 
