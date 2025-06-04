@@ -3,6 +3,8 @@ name: Build and Release
 on:
   push:
     branches: [ "main" ]
+    tags: # <--- Add this
+      - 'v*.*.*' # Matches tags like v1.0.0, v1.2.3 etc.
   pull_request:
     branches: [ "main" ]
 
@@ -48,5 +50,6 @@ jobs:
               uses: softprops/action-gh-release@v2
               with:
                 files: dist/**/*
+                name: Release ${{ github.ref_name }}
               env:
                 GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
