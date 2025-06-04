@@ -20,12 +20,35 @@ func handleConnection(clientConn net.Conn, targetAddress string) {
 	go func() {
 		// Forward data from client to target
 		if _, err := io.Copy(targetConn, clientConn); err != nil {
+			//if err is connection reset by peer, we can ignore it
+			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+				log.Printf("Connection reset by peer: %v", err)
+				return
+			}
+
+			//if err is use of closed network connection, we can ignore it
+			if netErr, ok := err.(net.Error); ok && netErr.Temporary() {
+				log.Printf("Temporary network error: %v", err)
+				return
+			}
+			// Log other errors
 			log.Printf("Error forwarding data from client to target: %v", err)
 		}
 	}()
 
 	// Forward data from target to client
 	if _, err := io.Copy(clientConn, targetConn); err != nil {
+		//if err is connection reset by peer, we can ignore it
+		if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+			log.Printf("Connection reset by peer: %v", err)
+			return
+		}
+		//if err is use of closed network connection, we can ignore it
+		if netErr, ok := err.(net.Error); ok && netErr.Temporary() {
+			log.Printf("Temporary network error: %v", err)
+			return
+		}
+		// Log other errors
 		log.Printf("Error forwarding data from target to client: %v", err)
 	}
 }
