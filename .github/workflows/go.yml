@@ -35,7 +35,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: gotunnel-ubuntu24-${{ matrix.arch }} # Unique name for each architecture
-          path: dist/gotunnel-ubuntu24-${{ matrix.arch }} # Path to the specific binary
+          path: dist/gotunnel-ubuntu24-${{ matrix.arch }}
 
   release:
     needs: build
@@ -49,9 +49,7 @@ jobs:
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
-          # When downloading *all* artifacts, each artifact will be placed in a subdirectory
-          # named after the artifact within the specified path.
-          path: downloaded_artifacts # Use a distinct directory name to avoid confusion
+          path: dist
 
       - name: Checkout code (required for Git commands)
         uses: actions/checkout@v4
@@ -81,11 +79,7 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          # Corrected path: Now looking for files inside the subdirectories created by download-artifact
-          files: downloaded_artifacts/**/gotunnel-ubuntu24-* # <--- MODIFIED HERE
-          # Or, if you want to flatten them into a single dist directory before upload
-          # files: dist/**/* # Requires an additional step to move files
-
+          files: dist/gotunnel-ubuntu24-*
           tag_name: ${{ github.event_name == 'workflow_dispatch' && steps.set_tag_name.outputs.tag_name || github.ref }}
           name: ${{ github.event_name == 'workflow_dispatch' && format('Manual Release {0}', steps.set_tag_name.outputs.tag_name) || format('Release {0}', github.ref_name) }}
           draft: ${{ github.event_name == 'workflow_dispatch' }}
