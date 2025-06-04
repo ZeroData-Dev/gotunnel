@@ -4,55 +4,99 @@ on:
   push:
     branches: [ "main" ]
     tags:
-      - 'v*.*.*' # Matches tags like v1.0.0, v1.2.3 etc.
+      - 'v*.*.*'
   pull_request:
     branches: [ "main" ]
+  workflow_dispatch: # Enable manual triggering
+    inputs:
+      version:
+        description: 'Release version (e.g., 1.0.0, 1.2.3-beta)'
+        required: false
+        default: '' # No default, so it's empty if not provided
 
-permissions:
-  contents: write # Needed to create/update releases and upload assets
-  
 jobs:
-    build:
-        runs-on: ubuntu-24.04
-        strategy:
-            matrix:
-                arch: [amd64, arm64]
+  build:
+    runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        arch: [amd64, arm64]
+    env:
+      GOARCH: ${{ matrix.arch }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.24'
+
+      - name: Build binary
+        run: |
+          mkdir -p dist
+          go build -v -o dist/gotunnel-ubuntu24-${{ matrix.arch }}
+        shell: bash
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: gotunnel-ubuntu24-${{ matrix.arch }}
+          path: dist/gotunnel-ubuntu24-${{ matrix.arch }}
+
+  release:
+    needs: build
+    runs-on: ubuntu-24.04
+    # Ensure this job only runs if a tag is pushed OR if it's a manual dispatch
+    if: |
+      github.event_name == 'push' && startsWith(github.ref, 'refs/tags/') ||
+      github.event_name == 'workflow_dispatch'
+    permissions:
+      contents: write # Crucial for creating and pushing tags/releases
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+
+      - name: Checkout code (required for Git commands)
+        uses: actions/checkout@v4
+        # The default token permissions are fine here because we explicitly set `contents: write` on the job
+
+      - name: Set up Git user
+        # Required before creating/pushing tags
+        run: |
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+        # This step always runs if `github.ref` is a tag (from a push) or if it's a manual dispatch
+        # We handle both cases below.
+
+      - name: Define Tag Name for Manual Dispatch
+        id: set_tag_name
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          # If version input is provided, use it, otherwise create a timestamp-based tag
+          TAG_NAME="v${{ github.event.inputs.version || format('{0}-{1}', github.run_id, github.run_attempt) }}"
+          echo "Generated tag name: $TAG_NAME"
+          echo "tag_name=$TAG_NAME" >> "$GITHUB_OUTPUT"
+
+      - name: Create and Push Tag
+        if: github.event_name == 'workflow_dispatch' # Only run this if manually dispatched
+        run: |
+          # Use the tag name defined in the previous step
+          TAG_TO_CREATE="${{ steps.set_tag_name.outputs.tag_name }}"
+          git tag -a "$TAG_TO_CREATE" -m "Release $TAG_TO_CREATE (Manual Dispatch)"
+          git push origin "$TAG_TO_CREATE"
         env:
-            GOARCH: ${{ matrix.arch }}
-        steps:
-            - name: Checkout code
-              uses: actions/checkout@v4
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # Ensure token is available for git push
 
-            - name: Set up Go
-              uses: actions/setup-go@v4
-              with:
-                go-version: '1.24'
-
-            - name: Build binary
-              run: |
-                mkdir -p dist
-                go build -v -o dist/gotunnel-ubuntu24-${{ matrix.arch }}
-              shell: bash
-
-            - name: Upload artifact
-              uses: actions/upload-artifact@v4
-              with:
-                name: gotunnel-ubuntu24-${{ matrix.arch }}
-                path: dist/gotunnel-ubuntu24-${{ matrix.arch }}
-
-    release:
-        needs: build
-        runs-on: ubuntu-24.04
-        steps:
-            - name: Download all artifacts
-              uses: actions/download-artifact@v4
-              with:
-                path: dist
-
-            - name: Create Release
-              uses: softprops/action-gh-release@v2
-              with:
-                files: dist/**/*
-                name: Release ${{ github.ref_name }}
-              env:
-                GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/**/*
+          # Use the existing tag for push events, or the newly created one for workflow_dispatch
+          tag_name: ${{ github.event_name == 'workflow_dispatch' && steps.set_tag_name.outputs.tag_name || github.ref }}
+          name: ${{ github.event_name == 'workflow_dispatch' && format('Manual Release {0}', steps.set_tag_name.outputs.tag_name) || format('Release {0}', github.ref_name) }}
+          draft: ${{ github.event_name == 'workflow_dispatch' }} # Draft for manual releases
+          prerelease: ${{ github.event_name == 'workflow_dispatch' }} # Prerelease for manual releases
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
