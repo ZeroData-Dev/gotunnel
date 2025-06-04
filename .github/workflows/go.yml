@@ -3,11 +3,14 @@ name: Build and Release
 on:
   push:
     branches: [ "main" ]
-    tags: # <--- Add this
+    tags:
       - 'v*.*.*' # Matches tags like v1.0.0, v1.2.3 etc.
   pull_request:
     branches: [ "main" ]
 
+permissions:
+  contents: write # Needed to create/update releases and upload assets
+  
 jobs:
     build:
         runs-on: ubuntu-24.04
