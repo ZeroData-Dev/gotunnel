@@ -27,7 +27,7 @@ jobs:
               run: |
                 mkdir -p dist
                 go build -v -o dist/gotunnel-ubuntu24-${{ matrix.arch }}
-                shell: bash
+              shell: bash
 
             - name: Upload artifact
               uses: actions/upload-artifact@v4
