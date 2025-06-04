@@ -35,7 +35,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: gotunnel-ubuntu24-${{ matrix.arch }}
-          path: dist/bin-${{ matrix.arch }}/
+          path: dist/gotunnel-ubuntu24-${{ matrix.arch }}
 
   release:
     needs: build
@@ -46,6 +46,9 @@ jobs:
     permissions:
       contents: write
     steps:
+      - name: Checkout code (required for Git commands)
+        uses: actions/checkout@v4
+
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
@@ -59,9 +62,6 @@ jobs:
           pwd
           echo "Looking for 'gotunnel-ubuntu24-*' files:"
           find dist -name "gotunnel-ubuntu24-*" -print
-
-      - name: Checkout code (required for Git commands)
-        uses: actions/checkout@v4
 
       - name: Set up Git user
         run: |
@@ -88,7 +88,7 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/**/*
+          files: dist/**/* # This should now find the files
           tag_name: ${{ github.event_name == 'workflow_dispatch' && steps.set_tag_name.outputs.tag_name || github.ref }}
           name: ${{ github.event_name == 'workflow_dispatch' && format('Manual Release {0}', steps.set_tag_name.outputs.tag_name) || format('Release {0}', github.ref_name) }}
           draft: ${{ github.event_name == 'workflow_dispatch' }}
