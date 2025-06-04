@@ -1,12 +1,12 @@
 name: Build and Release
 
 on:
-  workflow_dispatch: # Enable manual triggering
+  workflow_dispatch:
     inputs:
       version:
         description: 'Release version (e.g., 1.0.0, 1.2.3-beta)'
         required: false
-        default: '' # No default, so it's empty if not provided
+        default: ''
 
 jobs:
   build:
@@ -34,63 +34,61 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: gotunnel-ubuntu24-${{ matrix.arch }}
-          path: dist/gotunnel-ubuntu24-${{ matrix.arch }}
+          name: gotunnel-ubuntu24-${{ matrix.arch }} # Unique name for each architecture
+          path: dist/gotunnel-ubuntu24-${{ matrix.arch }} # Path to the specific binary
 
   release:
     needs: build
     runs-on: ubuntu-24.04
-    # Ensure this job only runs if a tag is pushed OR if it's a manual dispatch
     if: |
       github.event_name == 'push' && startsWith(github.ref, 'refs/tags/') ||
       github.event_name == 'workflow_dispatch'
     permissions:
-      contents: write # Crucial for creating and pushing tags/releases
+      contents: write
     steps:
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
-          path: dist
+          # When downloading *all* artifacts, each artifact will be placed in a subdirectory
+          # named after the artifact within the specified path.
+          path: downloaded_artifacts # Use a distinct directory name to avoid confusion
 
       - name: Checkout code (required for Git commands)
         uses: actions/checkout@v4
-        # The default token permissions are fine here because we explicitly set `contents: write` on the job
 
       - name: Set up Git user
-        # Required before creating/pushing tags
         run: |
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
-        # This step always runs if `github.ref` is a tag (from a push) or if it's a manual dispatch
-        # We handle both cases below.
 
       - name: Define Tag Name for Manual Dispatch
         id: set_tag_name
         if: github.event_name == 'workflow_dispatch'
         run: |
-          # If version input is provided, use it, otherwise create a timestamp-based tag
           TAG_NAME="v${{ github.event.inputs.version || format('{0}-{1}', github.run_id, github.run_attempt) }}"
           echo "Generated tag name: $TAG_NAME"
           echo "tag_name=$TAG_NAME" >> "$GITHUB_OUTPUT"
 
       - name: Create and Push Tag
-        if: github.event_name == 'workflow_dispatch' # Only run this if manually dispatched
+        if: github.event_name == 'workflow_dispatch'
         run: |
-          # Use the tag name defined in the previous step
           TAG_TO_CREATE="${{ steps.set_tag_name.outputs.tag_name }}"
           git tag -a "$TAG_TO_CREATE" -m "Release $TAG_TO_CREATE (Manual Dispatch)"
           git push origin "$TAG_TO_CREATE"
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # Ensure token is available for git push
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/**/* # <--- THIS IS THE CRUCIAL LINE FOR INCLUDING BINARIES
-          # Use the existing tag for push events, or the newly created one for workflow_dispatch
+          # Corrected path: Now looking for files inside the subdirectories created by download-artifact
+          files: downloaded_artifacts/**/gotunnel-ubuntu24-* # <--- MODIFIED HERE
+          # Or, if you want to flatten them into a single dist directory before upload
+          # files: dist/**/* # Requires an additional step to move files
+
           tag_name: ${{ github.event_name == 'workflow_dispatch' && steps.set_tag_name.outputs.tag_name || github.ref }}
           name: ${{ github.event_name == 'workflow_dispatch' && format('Manual Release {0}', steps.set_tag_name.outputs.tag_name) || format('Release {0}', github.ref_name) }}
-          draft: ${{ github.event_name == 'workflow_dispatch' }} # Draft for manual releases
-          prerelease: ${{ github.event_name == 'workflow_dispatch' }} # Prerelease for manual releases
+          draft: ${{ github.event_name == 'workflow_dispatch' }}
+          prerelease: ${{ github.event_name == 'workflow_dispatch' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
