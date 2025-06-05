@@ -13,8 +13,10 @@ jobs:
     runs-on: ubuntu-24.04
     strategy:
       matrix:
+        os: [ubuntu-24.04,macos-latest,windows-latest]
         arch: [amd64, arm64]
     env:
+      GOOS: ${{ matrix.os == 'ubuntu-24.04' && 'linux' || matrix.os == 'macos-latest' && 'darwin' || 'windows' }}
       GOARCH: ${{ matrix.arch }}
     steps:
       - name: Checkout code
@@ -28,14 +30,17 @@ jobs:
       - name: Build binary
         run: |
           mkdir -p dist
-          go build -v -o dist/gotunnel-ubuntu24-${{ matrix.arch }}
-        shell: bash
+          if [ "${{ matrix.os }}" = "windows-latest" ]; then
+            pwsh -Command "go build -v -o dist/gotunnel-${{ matrix.os }}-${{ matrix.arch }}.exe"
+          else
+            go build -v -o dist/gotunnel-${{ matrix.os }}-${{ matrix.arch }}
+          fi
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: gotunnel-ubuntu24-${{ matrix.arch }}
-          path: dist/gotunnel-ubuntu24-${{ matrix.arch }}
+          name: gotunnel-${{ matrix.os }}-${{ matrix.arch }}
+          path: dist/gotunnel-${{ matrix.os }}-${{ matrix.arch }}
 
   release:
     needs: build
@@ -60,8 +65,8 @@ jobs:
           ls -R dist
           echo "Current working directory:"
           pwd
-          echo "Looking for 'gotunnel-ubuntu24-*' files:"
-          find dist -name "gotunnel-ubuntu24-*" -print
+          echo "Looking for 'gotunnel-*' files:"
+          find dist -name "gotunnel-*" -print
 
       - name: Set up Git user
         run: |
